@@ -1,0 +1,242 @@
+--questions
+use bikestores
+Select * from production.brands;
+Select * from production.categories;
+Select * from production.products;
+Select * from production.stocks;
+Select * from sales.customers;
+Select * from sales.order_items;
+Select * from sales.orders;
+Select * from sales.staffs;
+Select * from sales.stores;
+
+--question1
+select max(list_price) 'most expensive bike' from production.products
+SELECT TOP 1 list_price FROM production.products ORDER BY list_price DESC;
+
+--question2
+--How many total customers does BikeStore have? Would you consider people with order status 3 as customers substantiate your answer?
+ select count(customer_id) from sales.customers
+
+
+ --3)How many stores does BikeStore have?
+select count(store_id) from sales.stores
+
+--4)What is the total price spent per order? Hint: total price = [list_price] *[quantity]*(1-[discount])
+
+SELECT order_id,  SUM(list_price * quantity * (1 - discount)) AS total_price_per_order
+FROM sales.order_items
+GROUP BY order_id;
+
+--5)What’s the sales/revenue per store? Hint: Sales revenue = ([list_price] *[quantity]*(1-[discount]))
+SELECT s.store_id, 
+       SUM(oi.list_price * oi.quantity * (1 - oi.discount)) AS total_sales_revenue
+FROM sales.order_items oi
+JOIN production.stocks s
+    ON oi.product_id = s.product_id 
+GROUP BY s.store_id;
+
+--6)Which category is most sold?
+SELECT TOP 1 c.category_name, SUM(oi.quantity) AS total_quantity_sold FROM sales.order_items oi
+JOIN production.products p
+    ON oi.product_id = p.product_id  -- Join with products on product_id
+JOIN production.categories c
+    ON p.category_id = c.category_id  -- Join with categories on category_id
+GROUP BY c.category_name
+ORDER BY total_quantity_sold DESC;
+
+
+--7)Which category rejected more orders?
+--orders and categories
+SELECT c.category_name, COUNT(o.order_id) AS rejected_orders
+FROM sales.orders o
+JOIN sales.order_items oi ON o.order_id = oi.order_id
+JOIN production.products p ON oi.product_id = p.product_id
+JOIN production.categories c ON p.category_id = c.category_id
+WHERE o.order_status = 3
+GROUP BY c.category_name
+ORDER BY rejected_orders DESC;
+
+--8)Which bike is the least sold?
+SELECT TOP 1 p.product_name, 
+       SUM(oi.quantity) AS total_quantity_sold
+FROM sales.order_items oi
+JOIN production.products p
+    ON oi.product_id = p.product_id  
+GROUP BY p.product_name
+ORDER BY total_quantity_sold ASC;
+
+--9)What’s the full name of a customer with ID 259?
+select first_name +' '+last_name as 'full name ' from sales.customers where customer_id = 259
+
+--10)What did the customer on question 9 buy and when? What’s the status of this order?
+SELECT oi.product_id, 
+       oi.quantity, 
+       o.order_date, 
+       o.order_status
+FROM sales.order_items oi
+JOIN sales.orders o
+    ON oi.order_id = o.order_id  
+WHERE customer_id =259
+
+--11)Which staff processed the order of customer 259? And from which store?
+SELECT s.staff_id, 
+       st.store_name
+FROM sales.orders o
+JOIN sales.staffs s
+    ON o.staff_id = s.staff_id  -- Join with staff to get staff details
+JOIN sales.stores st
+    ON o.store_id = st.store_id  -- Join with stores to get store details
+WHERE o.customer_id = 259; 
+
+--12)How many staff does BikeStore have? Who seems to be the lead Staff at BikeStore?
+SELECT COUNT(*) AS total_staff FROM sales.staffs;
+-- lead is the one with NULL for manager id
+select staff_id from sales.staffs WHERE manager_id is NULL
+
+
+--13)Which brand is the most liked?
+SELECT TOP 1 
+       b.brand_name, 
+       SUM(s.quantity) AS total_sold
+FROM production.products p
+JOIN production.stocks s
+    ON s.product_id = p.product_id  -- Join stocks with products
+JOIN production.brands b
+    ON p.brand_id = b.brand_id  -- Join products with brands
+GROUP BY b.brand_name
+ORDER BY total_sold DESC;
+
+--14)How many categories does BikeStore have, and which one is the least liked?
+SELECT COUNT(*) AS total_categories FROM production.categories; 
+-- least liked
+SELECT TOP 1 
+       c.category_name, 
+       SUM(oi.quantity) AS total_sold
+FROM production.categories c
+JOIN production.products p
+    ON c.category_id = p.category_id  -- Join categories with products
+JOIN sales.order_items oi
+    ON p.product_id = oi.product_id  -- Join products with order items
+GROUP BY c.category_name
+ORDER BY total_sold ASC; 
+
+--15)Which store still have more products of the most liked brand?
+SELECT TOP 1 
+       s.store_name, 
+       SUM(st.quantity) AS total_stock
+FROM production.stocks st
+JOIN production.products p
+    ON st.product_id = p.product_id  -- Join stocks with products
+JOIN production.brands b
+    ON p.brand_id = b.brand_id  -- Join products with brands
+JOIN sales.stores s
+    ON st.store_id = s.store_id  -- Join stocks with stores
+WHERE p.brand_id = (
+    -- Subquery to get the most liked brand ID based on sales
+    SELECT TOP 1 
+           p2.brand_id
+    FROM production.products p2
+    JOIN sales.order_items oi
+        ON p2.product_id = oi.product_id 
+    JOIN production.brands b2
+        ON p2.brand_id = b2.brand_id  
+    GROUP BY p2.brand_id
+    ORDER BY SUM(oi.quantity) DESC  
+)
+GROUP BY s.store_name
+ORDER BY total_stock DESC; 
+
+--16)Which state is doing better in terms of sales?
+SELECT TOP 1
+       s.state, 
+       SUM(oi.list_price * oi.quantity * (1 - oi.discount)) AS total_sales
+FROM sales.order_items oi
+JOIN sales.orders o
+    ON oi.order_id = o.order_id  -- Join order items with orders
+JOIN sales.stores s
+    ON o.store_id = s.store_id  -- Join orders with stores (assumes stores table has state info)
+GROUP BY s.state
+ORDER BY total_sales DESC;
+
+--17)What’s the discounted price of product id 259?
+SELECT 
+    oi.product_id, 
+    oi.list_price, 
+    oi.quantity, 
+    oi.discount,
+    (oi.list_price * oi.quantity * (1 - oi.discount)) AS discounted_price
+FROM sales.order_items oi
+WHERE oi.product_id = 259;
+
+
+--18)What’s the product name, quantity, price, category, model year and brand name of product number 44?
+
+SELECT 
+    p.product_name,
+    st.quantity,
+    p.list_price,
+    c.category_name,
+    p.model_year,
+    b.brand_name
+FROM production.products p
+JOIN production.stocks st
+    ON p.product_id = st.product_id  -- Join products with stocks to get quantity
+JOIN production.categories c
+    ON p.category_id = c.category_id  -- Join products with categories to get category name
+JOIN production.brands b
+    ON p.brand_id = b.brand_id  -- Join products with brands to get brand name
+WHERE p.product_id = 44;  -- Filter for product_id = 44
+
+
+
+--19)What’s the zip code of CA?
+SELECT zip_code FROM sales.stores  WHERE  state = 'CA'
+
+--20)How many states does BikeStore operate in?
+SELECT COUNT(DISTINCT s.state) AS number_of_states
+FROM sales.stores s;
+
+
+--21)How many bikes under the children category were sold in the last 8 months?
+
+SELECT *  FROM production.categories c WHERE c.category_name = 'Children Bicycles';
+
+SELECT 
+    SUM(oi.quantity) AS total_bikes_sold
+FROM sales.order_items oi
+JOIN sales.orders o
+    ON oi.order_id = o.order_id  -- Join order items with orders
+JOIN production.products p
+    ON oi.product_id = p.product_id  -- Join order items with products
+JOIN production.categories c
+    ON p.category_id = c.category_id  -- Join products with categories
+WHERE c.category_name = 'Children Bicycles'  -- Filter for "Children" category
+
+
+--22)What’s the shipped date for the order from customer 523
+
+SELECT 
+    o.order_id,
+    o.shipped_date
+FROM sales.orders o
+JOIN sales.customers c
+    ON o.customer_id = c.customer_id  -- Join orders with customers
+WHERE c.customer_id = 523;  -- Filter for customer 523 
+
+--23)How many orders are still pending?
+
+SELECT COUNT(*) AS total_pending_orders
+FROM sales.orders
+WHERE order_status = 1;  -- Assuming order_status 1 indicates 'Pending'
+
+--24)What’s the names of category and brand does "Electra white water 3i - 2018" fall under?
+SELECT 
+    c.category_name,
+    b.brand_name
+FROM production.products p
+JOIN production.categories c
+    ON p.category_id = c.category_id  -- Join products with categories
+JOIN production.brands b
+    ON p.brand_id = b.brand_id  -- Join products with brands
+WHERE p.product_name = 'Electra white water 3i - 2018';  -- Filter for the specific product
